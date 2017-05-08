@@ -1,0 +1,147 @@
+From 75196fd6c76970ae8d12de6778d671332b8433c0 Mon Sep 17 00:00:00 2001
+From: Andrei Gavrila <kiuny@github.com>
+Date: Sun, 7 May 2017 12:17:27 +0300
+Subject: [PATCH] Added syscall_tbl entry
+
+Added asmlinkage
+
+Added sys_kernel_lab syscall implementation
+
+Implemented syscall 334 that receives a string and its length and returns successful if the string is either valid base64 or hex
+---
+ arch/x86/entry/syscalls/syscall_64.tbl |  1 +
+ include/linux/syscalls.h               |  2 +
+ kernel/sys.c                           | 87 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 90 insertions(+)
+
+diff --git a/arch/x86/entry/syscalls/syscall_64.tbl b/arch/x86/entry/syscalls/syscall_64.tbl
+index e27f33101574..4ee2fd126166 100644
+--- a/arch/x86/entry/syscalls/syscall_64.tbl
++++ b/arch/x86/entry/syscalls/syscall_64.tbl
+@@ -340,6 +340,7 @@
+ 331	common	pkey_free		sys_pkey_free
+ 332	common	statx			sys_statx
+ 333	64	eudyptula		sys_eudyptula
++334	64	kernel_lab		sys_kernel_lab
+ 
+ #
+ # x32-specific system call numbers start at 512 to avoid cache impact
+diff --git a/include/linux/syscalls.h b/include/linux/syscalls.h
+index e745e144b356..095b4d15f009 100644
+--- a/include/linux/syscalls.h
++++ b/include/linux/syscalls.h
+@@ -908,4 +908,6 @@ asmlinkage long sys_statx(int dfd, const char __user *path, unsigned flags,
+ 
+ asmlinkage long sys_eudyptula(int high_id, int low_id);
+ 
++asmlinkage long sys_kernel_lab(const char __user *str, int len);
++
+ #endif
+diff --git a/kernel/sys.c b/kernel/sys.c
+index 0575ef648652..ed19d555c8a3 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -68,6 +68,9 @@
+ #include <asm/io.h>
+ #include <asm/unistd.h>
+ 
++#include <linux/string.h>
++#include <linux/slab.h>
++
+ #ifndef SET_UNALIGN_CTL
+ # define SET_UNALIGN_CTL(a, b)	(-EINVAL)
+ #endif
+@@ -2402,6 +2405,90 @@ SYSCALL_DEFINE2(eudyptula, int, high_id, int, low_id)
+ 		return -EINVAL;
+ }
+ 
++char lowercase(char c) 
++{
++	return c - ((c >= 'A' && c <= 'Z')? 'A'-'a': 0);
++}
++
++int is_valid_hex_string(const char* buf, int len) 
++{
++	char tmp;
++
++	while (len--) 
++	{
++		tmp = lowercase(buf[len]);
++		if ((tmp < 'a' || tmp > 'f') && (tmp < '0' || tmp > '9')) 
++		{
++			return 0;
++		}
++	}
++	return 1;
++
++}
++
++int is_valid_b64_char(char c)
++{
++	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || 
++			c == '+' || c == '/';
++}
++
++int is_valid_b64_string(const char* buf, int len) 
++{
++	int n = len;
++	int equals = 0;
++
++	if(n&3) //multiple of 4, slightly faster than modulo
++	{
++		return 0;
++	}
++
++	while (n--)
++	{
++		if(buf[n] == '=')
++		{
++			equals++;
++		} 
++		else if (!is_valid_b64_char(buf[n]))
++		{
++			return 0;
++		}
++	}
++
++	while (equals) 
++	{
++		if(buf[len-(equals--)] != '=')
++		{
++			return 0;
++		}
++	}
++
++	return 1;	
++}
++
++SYSCALL_DEFINE2(kernel_lab, const char __user *, msg, int, len) 
++{
++	char* kbuf;
++
++	if(len == 0) {
++		return -EINVAL;
++	}
++
++	kbuf = (char*) kmalloc(len+1, GFP_KERNEL);
++	memset(kbuf, 0, len+1);
++
++	copy_from_user(kbuf, msg, len);
++
++	if (is_valid_hex_string(kbuf, len) || is_valid_b64_string(kbuf, len)) {
++		kfree(kbuf);
++		return 0;
++	}
++
++	kfree(kbuf);
++	return -EINVAL;
++}
++
++
++
+ #ifdef CONFIG_COMPAT
+ struct compat_sysinfo {
+ 	s32 uptime;
+-- 
+2.12.2
+
