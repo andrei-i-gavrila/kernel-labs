@@ -1,0 +1,23 @@
+Use the keylogger code sample from lab 4 and the led blinking code samples
+from lab 3 to construct a module which records all key strokes in a system
+and when a specific key combination is typed, turns a led on or off.
+
+You can select any key combination you like for controlling a led, for ex.:
+
+"start caps" and "stop caps" will turn the caps led on/off.
+
+When a user types: "Hello I'm testing the start caps feature this is cool"
+the capslock key led will be automatically be turned on.
+
+If the user types "Hello I'm testing the start cap feature this is cool"
+the capslock key led will NOT be automatically turned on.
+
+The same applies to "stop caps".
+
+Constraints:
+    1. The keylogger / led logic should run in the background and work
+    without any user interaction (no need to control leds via debugfs)
+    once the module is inserted.
+    2. The led start/stop logic should always be active, regardless of
+    where the user types (in a web browser GUI, in a terminal, etc) as
+    long as the user types the correct key combination like "start caps".
